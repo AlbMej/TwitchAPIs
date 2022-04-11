@@ -1,0 +1,7 @@
+user_id,user_name,created_at,is_banned,banned_until
+1, harry,2019-05-20T16:41:59.832Z,false,null
+2, snape,2018-05-20T16:41:59.832Z,true,null
+3, ron,2010-05-20T16:41:59.832Z,true,2011-05-20T16:41:59.832Z
+4,hermione,2019-10-20T16:41:59.832Z,true,2023-05-20T16:41:59.832Z
+5, hagrid,2020-07-20T16:41:59.832Z,true
+6,malfoy,11111111,false,null

@@ -1,0 +1,7 @@
+flask_restful
+requests
+werkzeug
+pandas
+numpy
+flask
+redis
