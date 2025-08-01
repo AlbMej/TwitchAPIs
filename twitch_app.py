@@ -6,11 +6,10 @@
 import numpy as np
 import pandas as pd
 import re, os, sqlite3
-from urllib.parse import urlencode
-from datetime import datetime, date
+from datetime import datetime
 from typing import List, Dict, Tuple
-from flask_restful import Resource, Api, reqparse
-from flask import Flask, request, render_template, flash, redirect, url_for, jsonify
+from flask_restful import Api
+from flask import Flask, request, jsonify, abort
 
 app = Flask(__name__)
 api = Api(app)

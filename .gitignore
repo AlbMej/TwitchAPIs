@@ -1,6 +1,9 @@
 # environment variables
 secret_config.py
 
+# program specific files
+twitch.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
