@@ -26,9 +26,9 @@ jobs:
         run: |
           response_code=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
-            -H "X-Hub-Signature: sha1=$(echo -n 'dummy_payload' | openssl sha1 -hmac '${{ secrets.PA_WEBHOOK_SECRET }}' | sed 's/^.* //')" \
+            -H "X-Hub-Signature: sha1=$(echo -n 'dummy_payload' | openssl sha1 -hmac '${{ secrets.PYANY_WEBHOOK_SECRET }}' | sed 's/^.* //')" \
             -d 'dummy_payload' \
-            "${{ secrets.PA_DEPLOY_URL }}")
+            "${{ secrets.PYANY_DEPLOY_URL }}")
             
           echo "PythonAnywhere API response code: $response_code"
           if [ "$response_code" -ne 200 ]; then
