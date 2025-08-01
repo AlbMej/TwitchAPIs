@@ -1,0 +1,48 @@
+name: Deploy to PythonAnywhere and Update GitHub Environment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://twitchapis.pythonanywhere.com/
+
+    steps:
+      # Step 1: Create "pending" deployment on GitHub
+      - name: Create GitHub Deployment
+        id: create_deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: production
+
+      # Step 2: Trigger actual deployment on PythonAnywhere
+      - name: Trigger PythonAnywhere Reload
+        run: |
+          response_code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "X-Hub-Signature: sha1=$(echo -n 'dummy_payload' | openssl sha1 -hmac '${{ secrets.PA_WEBHOOK_SECRET }}' | sed 's/^.* //')" \
+            -d 'dummy_payload' \
+            "${{ secrets.PA_DEPLOY_URL }}")
+            
+          echo "PythonAnywhere API response code: $response_code"
+          if [ "$response_code" -ne 200 ]; then
+            echo "Failed to trigger PythonAnywhere deployment."
+            exit 1
+          fi
+
+      # Step 3: Update deployment status (success or failure)
+      - name: Update GitHub Deployment Status
+        if: always()
+        uses: bobheadxi/deployments@v1
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+          env_url: https://twitchapis.pythonanywhere.com/
