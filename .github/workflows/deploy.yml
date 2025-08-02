@@ -1,17 +1,22 @@
-name: Deploy to PythonAnywhere and Update GitHub Environment
+name: Deploy to PythonAnywhere
 
 on:
-  deployment
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://twitchapis.pythonanywhere.com/
 
     steps:
-      # Step 1: start_deployment.yml creates "pending" deployment on GitHub (avoids "inactive" status from github-actions)
+      # Step 1: Create "pending" deployment on GitHub
+      - name: Create GitHub Deployment
+        id: create_deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: production
 
       # Step 2: Trigger actual deployment on PythonAnywhere
       - name: Trigger PythonAnywhere Reload
@@ -34,6 +39,16 @@ jobs:
           step: finish
           token: ${{ secrets.GITHUB_TOKEN }}
           status: ${{ job.status }}
-          deployment_id: ${{ github.event.deployment.id }}
+          deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
           env: production
           env_url: https://twitchapis.pythonanywhere.com/
+
+  deployment-status:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://twitchapis.pythonanywhere.com/
+    steps:
+      - name: Deployment Completed
+        run: echo "Production deployment completed successfully"
