@@ -1,9 +1,7 @@
 name: Deploy to PythonAnywhere and Update GitHub Environment
 
 on:
-  push:
-    branches:
-      - main
+  deployment
 
 jobs:
   deploy:
@@ -13,13 +11,7 @@ jobs:
       url: https://twitchapis.pythonanywhere.com/
 
     steps:
-      # Step 1: Create "pending" deployment on GitHub
-      - name: Create GitHub Deployment
-        id: create_deployment
-        uses: chrnorm/deployment-action@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          environment: production
+      # Step 1: start_deployment.yml creates "pending" deployment on GitHub (avoids "inactive" status from github-actions)
 
       # Step 2: Trigger actual deployment on PythonAnywhere
       - name: Trigger PythonAnywhere Reload
