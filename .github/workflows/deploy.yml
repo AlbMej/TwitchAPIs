@@ -34,6 +34,6 @@ jobs:
           step: finish
           token: ${{ secrets.GITHUB_TOKEN }}
           status: ${{ job.status }}
-          deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+          deployment_id: ${{ github.event.deployment.id }}
           env: production
           env_url: https://twitchapis.pythonanywhere.com/

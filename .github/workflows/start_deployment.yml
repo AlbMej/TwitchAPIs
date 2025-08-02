@@ -12,7 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create GitHub Deployment
-        uses: chrnorm/deployment-action@v2
+        uses: bobheadxi/deployments@v1
+        id: deployment
         with:
+          step: start
           token: ${{ secrets.GITHUB_TOKEN }}
-          environment: production
+          env: production
