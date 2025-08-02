@@ -18,7 +18,7 @@ import hashlib
 import secret_config
 
 # --- Get W_SECRET for GitHub Actions Deployment to PythonAnywhere
-W_SECRET = secret_config.PYANY_WEBHOOK_SECRET
+W_SECRET = secret_config.PYANY_WEBHOOK_SECRET.encode()  # Encode as bytes for hmac
 
 
 def is_valid_signature(x_hub_signature, data, private_key):
@@ -26,8 +26,7 @@ def is_valid_signature(x_hub_signature, data, private_key):
     # private key is your webhook secret
     hash_algorithm, github_signature = x_hub_signature.split('=', 1)
     algorithm = hashlib.__dict__.get(hash_algorithm)
-    encoded_key = bytes(private_key, 'latin-1')
-    mac = hmac.new(encoded_key, msg=data, digestmod=algorithm)
+    mac = hmac.new(key=private_key, msg=data, digestmod=algorithm)
     return hmac.compare_digest(mac.hexdigest(), github_signature)
 
 
@@ -271,27 +270,33 @@ def github_webhook():
 
         # Abort incomplete request. Request must be well formed
         if 'X-Github-Event' not in request.headers:
+            print('Deploy request is incomplete: {headers}'.format(headers=request.headers))
             abort(abort_code)
 
         # Abort. Invalid request
         if 'X-Github-Delivery' not in request.headers:
+            print('Deploy request is invalid: {headers}'.format(headers=request.headers))
             abort(abort_code)
 
         # Abort. Unauthorized request
         if 'X-Hub-Signature' not in request.headers:
+            print('Deploy request is unauthorized: {headers}'.format(headers=request.headers))
             abort(abort_code)
 
         # Abort if not JSON. Cannot parse the payload
         if not request.is_json:
+            print('Deploy request is not JSON: {headers}'.format(headers=request.headers))
             abort(abort_code)
 
         # Abort. Source cannot be identified
         if 'User-Agent' not in request.headers:
+            print('Deploy request is missing User-Agent: {headers}'.format(headers=request.headers))
             abort(abort_code)
 
         # Abort if request does not come from GitHub's own webhook service
         ua = request.headers.get('User-Agent')
         if not ua.startswith('GitHub-Hookshot/'):
+            print('Deploy request is not from GitHub: {ua}'.format(ua=ua))
             abort(abort_code)
 
         event = request.headers.get('X-GitHub-Event')
@@ -309,8 +314,7 @@ def github_webhook():
 
         payload = request.get_json()
         if payload is None:
-            print('Deploy payload is empty: {payload}'.format(
-                payload=payload))
+            print('Deploy payload is empty: {payload}'.format(payload=payload))
             abort(abort_code)
 
         if payload['ref'] != 'refs/heads/master':
