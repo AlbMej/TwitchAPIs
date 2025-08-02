@@ -3,6 +3,8 @@
 #
 # Alberto Mejia
 # -----------------------------------------------------------
+import json
+import git
 import numpy as np
 import pandas as pd
 import re, os, sqlite3
@@ -11,12 +13,34 @@ from typing import List, Dict, Tuple
 from flask_restful import Api
 from flask import Flask, request, jsonify, abort
 
+import hmac
+import hashlib
+import secret_config
+
+# --- Get W_SECRET for GitHub Actions Deployment to PythonAnywhere
+W_SECRET = secret_config.PYANY_WEBHOOK_SECRET
+
+
+def is_valid_signature(x_hub_signature, data, private_key):
+    # x_hub_signature and data are from the webhook payload
+    # private key is your webhook secret
+    hash_algorithm, github_signature = x_hub_signature.split('=', 1)
+    algorithm = hashlib.__dict__.get(hash_algorithm)
+    encoded_key = bytes(private_key, 'latin-1')
+    mac = hmac.new(encoded_key, msg=data, digestmod=algorithm)
+    return hmac.compare_digest(mac.hexdigest(), github_signature)
+
+
 app = Flask(__name__)
 api = Api(app)
+
 
 @app.route("/")
 def index():
     return "Twitch Static CSV API"
+
+
+# --- Database Functions ---
 
 def get_db_connection() -> Tuple[sqlite3.Connection, sqlite3.Cursor]:
     """
@@ -43,7 +67,7 @@ def create_table_from_static_csv():
                             is_banned INTEGER,
                             banned_until datetime)'''
     cursor.execute(create_table_query) 
-    conn.commit() # Commit changes
+    conn.commit()  # Commit changes
 
     DATA_PATH = './db.csv'
     df = pd.read_csv(DATA_PATH)
@@ -92,11 +116,10 @@ def unban_user(userId: int):
     args = (None, False, userId)
     query = "UPDATE users SET banned_until =?, is_banned =? WHERE user_id ==?"
     result = cursor.execute(query, args)
-    conn.commit() # Commit changes
+    conn.commit()  # Commit changes
 
 
-### REST APIs ###
-
+# --- REST API Endpoints ---
 
 @app.route("/api/all_records", methods=['GET'])
 def AllRecords():
@@ -126,7 +149,7 @@ def GetUser(userId: str) -> str:
     user = []
     if result is None:
         # return ('', 404)
-        return ({'user': user}, 404) # Not found
+        return ({'user': user}, 404)  # Not found
     else:
         user.append({
                         "user_id":      result[0],
@@ -173,7 +196,7 @@ def BanUser(userId: str, bannedUntil: str = None):
     """
     Args:
         userId: A ID of the user to ban
-        
+
         bannedUntil:
             Date denoting the end date of a user's ban (month/date/year)
             If None then user is permanently banned
@@ -184,27 +207,25 @@ def BanUser(userId: str, bannedUntil: str = None):
     if bannedUntil is not None:
         datetime_units = re.split("[-/T:. ]", bannedUntil)
         if len(datetime_units) == 3: 
-            date = datetime.strptime(bannedUntil, '%Y-%m-%d')#.date()
-            banned = date.isoformat(sep='T', timespec='milliseconds') + 'Z'
-        
-        if len(datetime_units) == 7:
-            date = datetime.strptime(bannedUntil,'%Y-%m-%dT%H:%M:%S.%fZ')#.date()
+            date = datetime.strptime(bannedUntil, '%Y-%m-%d')  # .date()
             banned = date.isoformat(sep='T', timespec='milliseconds') + 'Z'
 
-    args = (banned, True, userId) # Parameterized 
+        if len(datetime_units) == 7:
+            date = datetime.strptime(bannedUntil, '%Y-%m-%dT%H:%M:%S.%fZ')  # .date()
+            banned = date.isoformat(sep='T', timespec='milliseconds') + 'Z'
+
+    args = (banned, True, userId)  # Parameterized
     query = "UPDATE users SET banned_until =?, is_banned =? WHERE user_id ==?"
     print(f'Banning user {userId} till {banned}...', end=" ")
     try:
         result = cursor.execute(query, args)
         print(f"| {list(result)}")
-        conn.commit() # Commit changes
+        conn.commit()  # Commit changes
         return ('OK', 200)
 
-    except:
-        print("Failed to create user")
-        return ('Failed to ban user', 400) # Failure
-
-    conn.commit() # Commit changes
+    except Exception as e:
+        print(f"Failed to ban user: {e}")
+        return ('Failed to ban user', 400)  # Failure
 
 
 @app.route("/api/create_user/<string:userName>", methods=['POST'])
@@ -223,27 +244,28 @@ def CreateUser(userName: str):
     is_banned = False    # A new user is unbanned
     banned_until = None
 
-    new_row = (user_id, userName, created_at, is_banned, banned_until) # Args
+    new_row = (user_id, userName, created_at, is_banned, banned_until)  # Args
     query = "INSERT INTO users VALUES(?, ?, ?, ?, ?)"
     print(f'Creating user {userName}...', end=" ")
     try:
         result = cursor.execute(query, new_row)
         print(f"| {list(result)}")
-        conn.commit() # Commit changes
-        return ('Successively created user', 201) # Created
+        conn.commit()  # Commit changes
+        return ('Successively created user', 201)  # Created
+    
+    except Exception as e:
+        print(f"Failed to create user: {e}")
+        return ('Failed to create user', 400)  # Failure
 
-    except:
-        print("Failed to create user")
-        return ('Failed to create user', 400)     # Failure
 
-
-
+# --- GitHub Webhook for PythonAnywhere Deployment ---
 @app.route('/update_server', methods=['POST'])
 def github_webhook():
-    # Reference: 
+    # Reference: https://medium.com/@aadibajpai/deploying-to-pythonanywhere-via-github-6f967956e664
     if request.method != 'POST':
         return 'OK'
     else:
+        py_anywhere_source_code_dir = '/home/twitchapis/mysite'
         abort_code = 418
         # Do initial validations on required headers
 
@@ -258,7 +280,7 @@ def github_webhook():
         # Abort. Unauthorized request
         if 'X-Hub-Signature' not in request.headers:
             abort(abort_code)
-        
+
         # Abort if not JSON. Cannot parse the payload
         if not request.is_json:
             abort(abort_code)
@@ -281,9 +303,9 @@ def github_webhook():
         x_hub_signature = request.headers.get('X-Hub-Signature')
         # webhook content type should be application/json for request.data to have the payload
         # request.data is empty in case of x-www-form-urlencoded
-        if not is_valid_signature(x_hub_signature, request.data, w_secret):
+        if not is_valid_signature(x_hub_signature, request.data, W_SECRET):
             print('Deploy signature failed: {sig}'.format(sig=x_hub_signature))
-            abort(abort_code) # Abort. Anyone with webhook URL could trigger a deployment on the server
+            abort(abort_code)  # Abort. Anyone with webhook URL could trigger a deployment on the server
 
         payload = request.get_json()
         if payload is None:
@@ -294,7 +316,7 @@ def github_webhook():
         if payload['ref'] != 'refs/heads/master':
             return json.dumps({'msg': 'Not master; ignoring'})
 
-        repo = git.Repo('/home/twitchapis/mysite')
+        repo = git.Repo(py_anywhere_source_code_dir)
         origin = repo.remotes.origin
 
         pull_info = origin.pull()
@@ -309,10 +331,11 @@ def github_webhook():
         print(f'{build_commit}')
         return 'Updated PythonAnywhere server to commit {commit}'.format(commit=commit_hash)
 
+
 if __name__ == '__main__':
     try:
         create_table_from_static_csv()
-    except:
-        None
+    except Exception as e:
+        print(f"Failed to create table from CSV: {e}")
     PORT = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=PORT, debug=True)  # Run Flask app
